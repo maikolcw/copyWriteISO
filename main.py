@@ -25,11 +25,18 @@ def create_working_dirs():
         print(error)
         return 0
 
+def get_sample_data():
+    # Get our sample files
+    print("Getting sample files from % s ..." % SAMPLE_FILE_PATH)
+
+
+
 
 def print_hi(name):
     # Use a breakpoint in the code line below to debug your script.
     print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
     create_working_dirs()
+    get_sample_data()
 
 
 # Press the green button in the gutter to run the script.
