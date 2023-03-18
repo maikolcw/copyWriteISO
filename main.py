@@ -6,8 +6,10 @@ import os
 import shutil
 import subprocess
 import time
-import wmi
 import ctypes
+
+# Used wmi for disk ejection command
+import wmi
 
 # imports for pycdlib for iso management
 from pycdlib.pycdlibexception import PyCdlibException
@@ -63,6 +65,7 @@ def generate_md5():
     try:
         path = os.path.join(START_DIR, SAMPLE_FILE_PATH)
         os.chdir(path)
+        # Assuming md5sum -- * is get all files' md5sum and put into md5 file
         # Grab all file names in current directory and put in list file_names
         file_names = glob.glob('*')
         # For each file, get the md5 hash and write hash and file name to file MD5SUM_FILE
@@ -72,6 +75,7 @@ def generate_md5():
                 for chunk in iter(lambda: file_to_md5.read(4096), b""):
                     md5_hasher.update(chunk)
             with open(FULL_PATH_TO_TEMP_DIR_MD5SUM_FILE, 'a', newline='\n') as md5_file:
+                # Trying to imitate .md5 format with double-spacing between hash and file name
                 md5_file.write("% s  % s\n" % (md5_hasher.hexdigest(), file_name))
         # Check the sums for paranoia’s sake
         rt = check_md5(FULL_PATH_TO_TEMP_DIR_MD5SUM_FILE)
@@ -88,23 +92,27 @@ def generate_md5():
 
 def check_md5(md5_file):
     print("Checking md5sums ...")
-    with open(md5_file, 'r') as file_to_check_md5:
-        data = file_to_check_md5.read()
-        # put each line in file into list list_of_lines
-        list_of_lines = data.split("\n")
-        # remove empty string at end of list
-        list_of_lines.pop(len(list_of_lines) - 1)
-        for line in list_of_lines:
-            # for every line in list_of_lines, split the hash and file name into a list hash_and_file
-            hash_and_file = line.split("  ")
-            # open file in hash_and_file, get md5 checksum, and compare new hash to hash from hash_and_file
-            # if not equal, return 0 and step out
-            md5_hasher = hashlib.md5()
-            with open(hash_and_file[1], 'rb') as file_to_md5:
-                for chunk in iter(lambda: file_to_md5.read(4096), b""):
-                    md5_hasher.update(chunk)
-            if not md5_hasher.hexdigest() == hash_and_file[0]:
-                return 0
+    try:
+        with open(md5_file, 'r') as file_to_check_md5:
+            data = file_to_check_md5.read()
+            # put each line in file into list list_of_lines
+            list_of_lines = data.split("\n")
+            # remove empty string at end of list
+            list_of_lines.pop(len(list_of_lines) - 1)
+            for line in list_of_lines:
+                # for every line in list_of_lines, split the hash and file name into a list hash_and_file
+                hash_and_file = line.split("  ")
+                # open file in hash_and_file, get md5 checksum, and compare new hash to hash from hash_and_file
+                # if not equal, return 0 and step out
+                md5_hasher = hashlib.md5()
+                with open(hash_and_file[1], 'rb') as file_to_md5:
+                    for chunk in iter(lambda: file_to_md5.read(4096), b""):
+                        md5_hasher.update(chunk)
+                if not md5_hasher.hexdigest() == hash_and_file[0]:
+                    return 0
+    except IOError as error:
+        print(error)
+        return 0
     return 1
 
 
@@ -153,11 +161,11 @@ def burn_iso():
     os.system("isoburn.exe /Q % s % s" % (OPTICAL_DRIVE, FULL_PATH_TO_TEMP_DIR_MD5SUM_FILE))
     # check if burning succeeded by checking if SAMPLE_FILE is present in optical drive
     # assuming burning will only burn ISO with one file called SAMPLE_FILE
-    if not os.path.exists(OPTICAL_DRIVE + SAMPLE_FILE.split(".")[0]):
-        return 0
+    # if not os.path.exists(OPTICAL_DRIVE + SAMPLE_FILE):
+    #     return 0
     if not OPTICAL_TYPE == 'cd' or OPTICAL_TYPE == 'dvd' or OPTICAL_TYPE == 'bd':
         print("Invalid type specified % s" % OPTICAL_TYPE)
-        exit()
+        exit(1)
     return 1
 
 
@@ -268,7 +276,4 @@ if __name__ == '__main__':
     # generate_iso() or failed("Failed to create ISO image")
     # burn_iso() or failed("Failed to burn ISO image")
     # check_disk() or failed("Failed to verify files on optical disk")
-    # # cleanup() or failed(""Failed to clean up"")
-    # failed("executing clean up")
-
-    0 or failed("Failed to create working directories")
+    # cleanup() or failed("Failed to clean up")
