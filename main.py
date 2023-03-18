@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import time
 import wmi
+import ctypes
 
 # imports for pycdlib for iso management
 from pycdlib.pycdlibexception import PyCdlibException
@@ -205,6 +206,12 @@ def check_disk():
         mount_test_again = subprocess.call("C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\powershell.exe"
                                            " Mount-DiskImage -ImagePath % s" % FULL_PATH_TO_TEMP_DIR_ISO_NAME,
                                            shell=True)
+        # Goes through each drive in computer, check if drive is a CD-ROM/DVD-ROM by number and if SAMPLE_FILE exist
+        c = wmi.WMI()
+        for drive in c.Win32_LogicalDisk():
+            if drive.DriveType == 5 and os.path.exists(drive.DeviceID + SAMPLE_FILE):
+                OPTICAL_DRIVE = drive.DeviceID
+                break
         if mount_test_again == 1:
             print("ERROR: Unable to re-mount % s!" % OPTICAL_DRIVE)
             return 0
@@ -230,7 +237,8 @@ def cleanup():
         os.system("rmdir /s /q % s" % FULL_PATH_TO_TEMP_DIR)
         print("Ejecting spent media ...")
         if os.path.exists(OPTICAL_DRIVE):
-            print("pop")
+            ctypes.windll.WINMM.mciSendStringW(u"open % s type cdaudio alias d_drive" % OPTICAL_DRIVE, None, 0, None)
+            ctypes.windll.WINMM.mciSendStringW(u"set d_drive door open", None, 0, None)
         return 1
     except OSError as error:
         print(error)
@@ -246,29 +254,10 @@ if __name__ == '__main__':
     OPTICAL_DRIVE = args.drive
     OPTICAL_TYPE = args.type
 
-    create_working_dirs() or print("Failed to create working directories")
-    get_sample_data() or print("Failed to copy sample data")
-    generate_md5() or print("Failed to generate initial md5")
-    generate_iso()
-    burn_iso()
-    check_disk()
-    cleanup()
-    # print(OPTICAL_DRIVE + SAMPLE_FILE)
-    # print(os.path.exists(OPTICAL_DRIVE + SAMPLE_FILE))
-    # c = wmi.WMI()
-    # for drive in c.Win32_LogicalDisk():
-    #     # prints all the drives details including name, type and size
-    #     print(drive)
-    #     print(drive.DriveType)
-    #     print(drive.Description)
-
-    # os.system("Mount-DiskImage -ImagePath % s" % FULL_PATH_TO_TEMP_DIR_ISO_NAME)
-    # mount_test2 = subprocess.call("C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\powershell.exe"
-    #                               " Mount-DiskImage -ImagePath % s" % FULL_PATH_TO_TEMP_DIR_ISO_NAME, shell=True)
-    # print(mount_test2)
-    # unmount_test = subprocess.call("C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\powershell.exe"
-    #                                " Dismount-DiskImage -ImagePath % s" % FULL_PATH_TO_TEMP_DIR_ISO_NAME, shell=True)
-    # print(unmount_test)
-    # print(OPTICAL_DRIVE + "\\" + ISO_NAME)
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    # create_working_dirs() or print("Failed to create working directories")
+    # get_sample_data() or print("Failed to copy sample data")
+    # generate_md5() or print("Failed to generate initial md5")
+    # generate_iso()
+    # burn_iso()
+    # check_disk()
+    # cleanup()
