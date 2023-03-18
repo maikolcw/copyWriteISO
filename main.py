@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import time
+import wmi
 
 # imports for pycdlib for iso management
 from pycdlib.pycdlibexception import PyCdlibException
@@ -128,7 +129,7 @@ def generate_iso():
         # all intermediate directories must exist. Some other restrictions on length and format like
         # ending with semicolon and version number, please look at pycdlib docs for more detail
         # rr_name required if using rock ridge extension
-        iso.add_fp(BytesIO(prepare_file_body), len(prepare_file_body), '/' + target_file_name.upper() + ';1',
+        iso.add_fp(BytesIO(prepare_file_body), len(prepare_file_body), '/' + SAMPLE_FILE + ';1',
                    rr_name=target_file_name)
 
         # write out the iso / mastering
@@ -168,13 +169,20 @@ def check_disk():
     while True:
         time.sleep(interval)
         sleep_count = sleep_count + interval
-        # Assuming user's powershell.exe is in system32
-        if not os.path.exists(OPTICAL_DRIVE + SAMPLE_FILE.split(".")[0]):
-            subprocess.call("C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\powershell.exe"
-                            " Mount-DiskImage -ImagePath % s" % FULL_PATH_TO_TEMP_DIR_ISO_NAME, shell=True)
-        if os.path.exists(OPTICAL_DRIVE + SAMPLE_FILE.split(".")[0]):
+        c = wmi.WMI()
+        # Goes through each drive in computer, check if drive is a CD-ROM/DVD-ROM by number and if SAMPLE_FILE exist
+        for drive in c.Win32_LogicalDisk():
+            if drive.DriveType == 5 and os.path.exists(drive.DeviceID + SAMPLE_FILE):
+                global OPTICAL_DRIVE
+                OPTICAL_DRIVE = drive.DeviceID
+                break
+        if os.path.exists(OPTICAL_DRIVE + SAMPLE_FILE):
             print("Drive appears to be mounted now")
             break
+        else:
+            # Assuming user's powershell.exe is in system32
+            subprocess.call("C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\powershell.exe"
+                            " Mount-DiskImage -ImagePath % s" % FULL_PATH_TO_TEMP_DIR_ISO_NAME, shell=True)
 
         # If they exceed the timeout limit, make a best effort to load the tray
         # in the next steps
@@ -193,6 +201,7 @@ def check_disk():
         print("Creating temp mount: % s" % mount_pt)
         os.makedirs(mount_pt, exist_ok=True)
         print("Mounting disk to mount point ...")
+        # Can't find Python library for mount or Windows cmd equivalent so opted for this
         mount_test_again = subprocess.call("C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\powershell.exe"
                                            " Mount-DiskImage -ImagePath % s" % FULL_PATH_TO_TEMP_DIR_ISO_NAME,
                                            shell=True)
@@ -200,10 +209,32 @@ def check_disk():
             print("ERROR: Unable to re-mount % s!" % OPTICAL_DRIVE)
             return 0
     print("Copying files from ISO ...")
-    if os.path.exists(os.path.join(START_DIR, TEMP_DIR, "mnt")):
-        shutil.copy2(os.path.join(START_DIR, TEMP_DIR, "mnt\\*"), FULL_PATH_TO_TEMP_DIR)
+    file_list = os.listdir(OPTICAL_DRIVE)
+    file_list = [OPTICAL_DRIVE + "\\" + filename for filename in file_list]
+    for file in file_list:
+        shutil.copy2(file, FULL_PATH_TO_TEMP_DIR)
     rt = check_md5(FULL_PATH_TO_TEMP_DIR_MD5SUM_FILE)
     return rt
+
+
+def cleanup():
+    print("Moving back to original location")
+    try:
+        os.chdir(START_DIR)
+        print("Now residing in % s" % START_DIR)
+        print(os.getcwd())
+        print("Cleaning up ...")
+        # Assuming ISO will only be mounted in TEMP_DIR and never in mnt
+        subprocess.call("C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\powershell.exe"
+                        " Dismount-DiskImage -ImagePath % s" % FULL_PATH_TO_TEMP_DIR_ISO_NAME, shell=True)
+        os.system("rmdir /s /q % s" % FULL_PATH_TO_TEMP_DIR)
+        print("Ejecting spent media ...")
+        if os.path.exists(OPTICAL_DRIVE):
+            print("pop")
+        return 1
+    except OSError as error:
+        print(error)
+        return 0
 
 
 if __name__ == '__main__':
@@ -221,6 +252,16 @@ if __name__ == '__main__':
     generate_iso()
     burn_iso()
     check_disk()
+    cleanup()
+    # print(OPTICAL_DRIVE + SAMPLE_FILE)
+    # print(os.path.exists(OPTICAL_DRIVE + SAMPLE_FILE))
+    # c = wmi.WMI()
+    # for drive in c.Win32_LogicalDisk():
+    #     # prints all the drives details including name, type and size
+    #     print(drive)
+    #     print(drive.DriveType)
+    #     print(drive.Description)
+
     # os.system("Mount-DiskImage -ImagePath % s" % FULL_PATH_TO_TEMP_DIR_ISO_NAME)
     # mount_test2 = subprocess.call("C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\powershell.exe"
     #                               " Mount-DiskImage -ImagePath % s" % FULL_PATH_TO_TEMP_DIR_ISO_NAME, shell=True)
