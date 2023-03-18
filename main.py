@@ -229,12 +229,13 @@ def cleanup():
     try:
         os.chdir(START_DIR)
         print("Now residing in % s" % START_DIR)
-        print(os.getcwd())
         print("Cleaning up ...")
         # Assuming ISO will only be mounted in TEMP_DIR and never in mnt
-        subprocess.call("C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\powershell.exe"
-                        " Dismount-DiskImage -ImagePath % s" % FULL_PATH_TO_TEMP_DIR_ISO_NAME, shell=True)
-        os.system("rmdir /s /q % s" % FULL_PATH_TO_TEMP_DIR)
+        if os.path.exists(FULL_PATH_TO_TEMP_DIR_ISO_NAME):
+            subprocess.call("C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\powershell.exe"
+                            " Dismount-DiskImage -ImagePath % s" % FULL_PATH_TO_TEMP_DIR_ISO_NAME, shell=True)
+        if os.path.exists(FULL_PATH_TO_TEMP_DIR):
+            os.system("rmdir /s /q % s" % FULL_PATH_TO_TEMP_DIR)
         print("Ejecting spent media ...")
         if os.path.exists(OPTICAL_DRIVE):
             ctypes.windll.WINMM.mciSendStringW(u"open % s type cdaudio alias d_drive" % OPTICAL_DRIVE, None, 0, None)
@@ -243,6 +244,13 @@ def cleanup():
     except OSError as error:
         print(error)
         return 0
+
+
+def failed(failed_message):
+    print(failed_message)
+    print("Attempting to clean up ...")
+    cleanup()
+    exit(1)
 
 
 if __name__ == '__main__':
@@ -254,10 +262,13 @@ if __name__ == '__main__':
     OPTICAL_DRIVE = args.drive
     OPTICAL_TYPE = args.type
 
-    # create_working_dirs() or print("Failed to create working directories")
-    # get_sample_data() or print("Failed to copy sample data")
-    # generate_md5() or print("Failed to generate initial md5")
-    # generate_iso()
-    # burn_iso()
-    # check_disk()
-    # cleanup()
+    # create_working_dirs() or failed("Failed to create working directories")
+    # get_sample_data() or failed("Failed to copy sample data")
+    # generate_md5() or failed("Failed to generate initial md5")
+    # generate_iso() or failed("Failed to create ISO image")
+    # burn_iso() or failed("Failed to burn ISO image")
+    # check_disk() or failed("Failed to verify files on optical disk")
+    # # cleanup() or failed(""Failed to clean up"")
+    # failed("executing clean up")
+
+    0 or failed("Failed to create working directories")
