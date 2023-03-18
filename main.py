@@ -4,6 +4,7 @@ import glob
 import hashlib
 import os
 import shutil
+import subprocess
 import time
 
 # imports for pycdlib for iso management
@@ -23,17 +24,18 @@ MD5SUM_FILE = 'optical_test.md5'
 START_DIR = os.getcwd()
 
 # Some helper paths
+FULL_PATH_TO_TEMP_DIR = os.path.join(START_DIR, TEMP_DIR)
 FULL_PATH_TO_TEMP_DIR_MD5SUM_FILE = os.path.join(START_DIR, TEMP_DIR, MD5SUM_FILE)
 FULL_PATH_TO_SAMPLE_FILE_PATH_SAMPLE_FILE = os.path.join(START_DIR, SAMPLE_FILE_PATH, SAMPLE_FILE)
+FULL_PATH_TO_TEMP_DIR_ISO_NAME = os.path.join(START_DIR, TEMP_DIR, ISO_NAME)
 
 
 def create_working_dirs():
     # First, create the temp dir and cd there
     print('Creating Temp directory and moving there ...')
     try:
-        path = os.path.join(START_DIR, TEMP_DIR)
-        os.makedirs(path, exist_ok=True)
-        os.chdir(path)
+        os.makedirs(FULL_PATH_TO_TEMP_DIR, exist_ok=True)
+        os.chdir(FULL_PATH_TO_TEMP_DIR)
         print("Now working in", os.getcwd())
         return 1
     except OSError as error:
@@ -44,9 +46,8 @@ def create_working_dirs():
 def get_sample_data():
     # Get our sample files
     print("Getting sample files from % s ..." % SAMPLE_FILE_PATH)
-    dst = os.path.join(START_DIR, TEMP_DIR)
     try:
-        shutil.copy2(FULL_PATH_TO_SAMPLE_FILE_PATH_SAMPLE_FILE, dst)
+        shutil.copy2(FULL_PATH_TO_SAMPLE_FILE_PATH_SAMPLE_FILE, FULL_PATH_TO_TEMP_DIR)
         return 1
     except IOError as error:
         print(error)
@@ -145,24 +146,88 @@ def generate_iso():
 def burn_iso():
     # Burn the ISO with the appropriate tool
     print("Sleeping 10 seconds in case drive is not yet ready ...")
-    time.sleep(10)
+    # time.sleep(10)
     print("Beginning image burn ...")
+    os.system("isoburn.exe /Q % s % s" % (OPTICAL_DRIVE, FULL_PATH_TO_TEMP_DIR_MD5SUM_FILE))
+    # check if burning succeeded by checking if SAMPLE_FILE is present in optical drive
+    # assuming burning will only burn ISO with one file called SAMPLE_FILE
+    if not os.path.exists(OPTICAL_DRIVE + SAMPLE_FILE.split(".")[0]):
+        return 0
+    if not OPTICAL_TYPE == 'cd' or OPTICAL_TYPE == 'dvd' or OPTICAL_TYPE == 'bd':
+        print("Invalid type specified % s" % OPTICAL_TYPE)
+        exit()
+    return 1
+
+
+def check_disk():
+    time_out = 300
+    sleep_count = 0
+    interval = 3
+    # Give the tester up to 5 minutes to reload the newly created CD/DVD
+    print("Waiting up to 5 minutes for drive to be mounted ...")
+    while True:
+        time.sleep(interval)
+        sleep_count = sleep_count + interval
+        # Assuming user's powershell.exe is in system32
+        if not os.path.exists(OPTICAL_DRIVE + SAMPLE_FILE.split(".")[0]):
+            subprocess.call("C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\powershell.exe"
+                            " Mount-DiskImage -ImagePath % s" % FULL_PATH_TO_TEMP_DIR_ISO_NAME, shell=True)
+        if os.path.exists(OPTICAL_DRIVE + SAMPLE_FILE.split(".")[0]):
+            print("Drive appears to be mounted now")
+            break
+
+        # If they exceed the timeout limit, make a best effort to load the tray
+        # in the next steps
+        if sleep_count >= time_out:
+            print("WARNING: TIMEOUT Exceeded and no mount detected!")
+            break
+    print("Deleting original data files ...")
+    if os.path.exists(SAMPLE_FILE):
+        os.remove(SAMPLE_FILE)
+    if os.path.exists(OPTICAL_DRIVE):
+        os.system("dir")
+        print("Disk is mounted to % s" % OPTICAL_DRIVE)
+    else:
+        print("Attempting best effort to mount % s on my own" % OPTICAL_DRIVE)
+        mount_pt = os.path.join(START_DIR, TEMP_DIR, "mnt")
+        print("Creating temp mount: % s" % mount_pt)
+        os.makedirs(mount_pt, exist_ok=True)
+        print("Mounting disk to mount point ...")
+        mount_test_again = subprocess.call("C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\powershell.exe"
+                                           " Mount-DiskImage -ImagePath % s" % FULL_PATH_TO_TEMP_DIR_ISO_NAME,
+                                           shell=True)
+        if mount_test_again == 1:
+            print("ERROR: Unable to re-mount % s!" % OPTICAL_DRIVE)
+            return 0
+    print("Copying files from ISO ...")
+    if os.path.exists(os.path.join(START_DIR, TEMP_DIR, "mnt")):
+        shutil.copy2(os.path.join(START_DIR, TEMP_DIR, "mnt\\*"), FULL_PATH_TO_TEMP_DIR)
+    rt = check_md5(FULL_PATH_TO_TEMP_DIR_MD5SUM_FILE)
+    return rt
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--drive", help="Optical drive file path", default="dev\\sr0")
+    # Assuming Windows will have default disk drive of D and D is not used by any other drive
+    parser.add_argument("-d", "--drive", help="Optical drive file path", default="D:")
     parser.add_argument("-t", "--type", help="Optical type", default="cd")
     args = parser.parse_args()
     OPTICAL_DRIVE = args.drive
     OPTICAL_TYPE = args.type
-    print(OPTICAL_DRIVE)
-    print(OPTICAL_TYPE)
 
-    # create_working_dirs() or print("Failed to create working directories")
-    # get_sample_data() or print("Failed to copy sample data")
-    # generate_md5() or print("Failed to generate initial md5")
-    # generate_iso()
-    # burn_iso()
+    create_working_dirs() or print("Failed to create working directories")
+    get_sample_data() or print("Failed to copy sample data")
+    generate_md5() or print("Failed to generate initial md5")
+    generate_iso()
+    burn_iso()
+    check_disk()
+    # os.system("Mount-DiskImage -ImagePath % s" % FULL_PATH_TO_TEMP_DIR_ISO_NAME)
+    # mount_test2 = subprocess.call("C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\powershell.exe"
+    #                               " Mount-DiskImage -ImagePath % s" % FULL_PATH_TO_TEMP_DIR_ISO_NAME, shell=True)
+    # print(mount_test2)
+    # unmount_test = subprocess.call("C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\powershell.exe"
+    #                                " Dismount-DiskImage -ImagePath % s" % FULL_PATH_TO_TEMP_DIR_ISO_NAME, shell=True)
+    # print(unmount_test)
+    # print(OPTICAL_DRIVE + "\\" + ISO_NAME)
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
