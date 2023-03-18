@@ -1,9 +1,10 @@
 # This is a sample Python script.
-
+import argparse
 import glob
 import hashlib
 import os
 import shutil
+import time
 
 # imports for pycdlib for iso management
 from pycdlib.pycdlibexception import PyCdlibException
@@ -141,11 +142,27 @@ def generate_iso():
         return 0
 
 
-if __name__ == '__main__':
-    create_working_dirs() or print("Failed to create working directories")
-    get_sample_data() or print("Failed to copy sample data")
-    generate_md5() or print("Failed to generate initial md5")
-    generate_iso()
+def burn_iso():
+    # Burn the ISO with the appropriate tool
+    print("Sleeping 10 seconds in case drive is not yet ready ...")
+    time.sleep(10)
+    print("Beginning image burn ...")
 
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-d", "--drive", help="Optical drive file path", default="dev\\sr0")
+    parser.add_argument("-t", "--type", help="Optical type", default="cd")
+    args = parser.parse_args()
+    OPTICAL_DRIVE = args.drive
+    OPTICAL_TYPE = args.type
+    print(OPTICAL_DRIVE)
+    print(OPTICAL_TYPE)
+
+    # create_working_dirs() or print("Failed to create working directories")
+    # get_sample_data() or print("Failed to copy sample data")
+    # generate_md5() or print("Failed to generate initial md5")
+    # generate_iso()
+    # burn_iso()
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
